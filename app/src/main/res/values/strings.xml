@@ -1,0 +1,10 @@
+<resources>
+    <string name="app_name">AINCRAD KEY GEN</string>
+    <string name="system_ready">SYSTEM READY</string>
+    <string name="portal_btn">PORTAL</string>
+    <string name="start_season_btn">START SEASON</string>
+    <string name="clear_data_btn">CLEAR DATA</string>
+    <string name="portal_title">AINCRAD PORTAL</string>
+    <string name="close">Close</string>
+    <string name="refresh">Refresh</string>
+</resources>
