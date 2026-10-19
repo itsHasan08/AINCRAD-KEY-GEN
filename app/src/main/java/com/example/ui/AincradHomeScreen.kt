@@ -1,14 +1,8 @@
 package com.example.ui
 
-import android.view.View
 import android.webkit.CookieManager
-import android.webkit.RenderProcessGoneDetail
-import android.webkit.WebResourceRequest
-import android.webkit.WebResourceResponse
-import android.webkit.WebSettings
 import android.webkit.WebStorage
 import android.webkit.WebView
-import android.webkit.WebViewClient
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
@@ -67,7 +61,6 @@ import com.example.model.AincradKey
 import com.example.ui.components.AincradActionButton
 import com.example.ui.components.AincradLogo
 import com.example.ui.components.EmbeddedPortalWebView
-import com.example.ui.components.NoKeyFoundDialog
 import com.example.ui.components.PORTAL_URL
 import com.example.ui.components.SeasonKeyLoadingDialog
 import com.example.ui.components.SeasonKeyModal
@@ -91,7 +84,6 @@ import com.example.ui.theme.StatusGreenText
 import com.example.ui.theme.TitleDarkCharcoal
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
-import java.io.ByteArrayInputStream
 
 enum class AincradNavTab {
     HOME,
@@ -100,15 +92,15 @@ enum class AincradNavTab {
 }
 
 /**
- * Aincrad Key Gen Main Screen:
+ * KEY GEN Main Screen:
  * - Pure white background (#FFFFFF) with dark/black system status icons.
  * - Bottom Navigation Bar (Home, History, Support).
- * - Clean top header: Circular Aincrad logo, Title, and centered borderless "SYSTEM READY".
- * - Website NEVER opens automatically on app launch. Opens ONLY when user taps PORTAL.
- * - START SEASON activates bypass system without opening/closing the UI repeatedly.
+ * - Clean top header: Red & Green dual-tone circular Key Gen logo on white, Title, and centered borderless "SYSTEM READY".
+ * - Portal opens ONLY when user taps PORTAL.
+ * - START SEASON activates bypass system ONLY if portal is open and verification is done.
  * - Real key extraction: Extracts the exact original key directly from the website without altering letters.
- * - Minimal SeasonKeyModal showing ONLY Key, COPY, and SAVE options.
- * - CLEAR DATA wipes cookies and cache, and closes portal without opening website.
+ * - Minimal SeasonKeyModal showing ONLY Key, COPY, and SAVE options on clean translucent surface (no black box).
+ * - CLEAR DATA wipes cookies and cache, stops bypass, and closes portal.
  */
 @Composable
 fun AincradHomeScreen(
@@ -122,17 +114,13 @@ fun AincradHomeScreen(
     var currentTab by remember { mutableStateOf(AincradNavTab.HOME) }
     var isPortalOpen by remember { mutableStateOf(false) }
     var activeWebView by remember { mutableStateOf<WebView?>(null) }
-    var backgroundWebView by remember { mutableStateOf<WebView?>(null) }
     var statusNotification by remember { mutableStateOf<String?>(null) }
 
     // State for 2-Second Loading Animation
     var isExtractingKey by remember { mutableStateOf(false) }
 
-    // State for Floating Key Modal (displays ONLY Key, Copy, Save)
+    // State for Floating Key Modal (displays ONLY Key, Copy, Save on clean light surface)
     var activeKeyModalString by remember { mutableStateOf<String?>(null) }
-
-    // State for Alert when no key is on the website yet
-    var showNoKeyFoundDialog by remember { mutableStateOf(false) }
 
     // Saved Keys List
     var savedKeysList by remember { mutableStateOf(keyRepo.getAllKeys()) }
@@ -140,84 +128,23 @@ fun AincradHomeScreen(
     DisposableEffect(Unit) {
         AincradKeyEngine.onKeyExtractedCallback = { extractedKey ->
             coroutineScope.launch {
+                AincradExtensionEngine.stopBypass(activeWebView)
                 activeKeyModalString = extractedKey
                 isExtractingKey = false
-                showNoKeyFoundDialog = false
                 statusNotification = "✓ ORIGINAL KEY EXTRACTED: $extractedKey"
             }
         }
         onDispose {
             soundManager.release()
             AincradKeyEngine.onKeyExtractedCallback = null
-            try {
-                backgroundWebView?.destroy()
-                backgroundWebView = null
-            } catch (_: Exception) {}
+            AincradExtensionEngine.stopBypass(activeWebView)
         }
     }
 
-    // Starts background bypass session if portal is not visually open
-    fun startBackgroundBypass() {
-        if (backgroundWebView == null) {
-            try {
-                prepareFreshDirectories(context)
-                val bgWv = WebView(context).apply {
-                    setLayerType(View.LAYER_TYPE_SOFTWARE, null)
-                    settings.apply {
-                        javaScriptEnabled = true
-                        domStorageEnabled = true
-                        databaseEnabled = true
-                        cacheMode = WebSettings.LOAD_DEFAULT
-                        setSupportMultipleWindows(false)
-                        mixedContentMode = WebSettings.MIXED_CONTENT_ALWAYS_ALLOW
-                        userAgentString = "Mozilla/5.0 (Linux; Android 14; Mobile) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Mobile Safari/537.36"
-                    }
-                    addJavascriptInterface(object {
-                        @android.webkit.JavascriptInterface
-                        fun onKeyExtracted(key: String) {
-                            if (key.isNotBlank()) {
-                                AincradKeyEngine.onKeyDetectedFromWebsite(key)
-                            }
-                        }
-                    }, "AincradBridge")
-                    webViewClient = object : WebViewClient() {
-                        override fun shouldInterceptRequest(view: WebView?, request: WebResourceRequest?): WebResourceResponse? {
-                            val url = request?.url?.toString() ?: ""
-                            if (AincradExtensionEngine.isAdOrTrackerUrl(url)) {
-                                return WebResourceResponse("text/plain", "UTF-8", ByteArrayInputStream(ByteArray(0)))
-                            }
-                            return super.shouldInterceptRequest(view, request)
-                        }
-                        override fun shouldOverrideUrlLoading(view: WebView?, request: WebResourceRequest?): Boolean {
-                            val url = request?.url?.toString() ?: ""
-                            val shortcut = AincradExtensionEngine.transformShortenerRedirect(url)
-                            if (shortcut != null) {
-                                view?.loadUrl(shortcut)
-                                return true
-                            }
-                            return false
-                        }
-                        override fun onPageFinished(view: WebView?, url: String?) {
-                            AincradExtensionEngine.injectExtension(view)
-                        }
-                        override fun onRenderProcessGone(view: WebView?, detail: RenderProcessGoneDetail?): Boolean {
-                            try { view?.destroy() } catch (_: Exception) {}
-                            backgroundWebView = null
-                            return true
-                        }
-                    }
-                    loadUrl(PORTAL_URL)
-                }
-                backgroundWebView = bgWv
-            } catch (_: Exception) {}
-        } else {
-            AincradExtensionEngine.triggerActiveKeyExtraction(backgroundWebView)
-        }
-    }
-
-    // Function to completely wipe all cookies, storage, and CLOSE webview (website will NOT reload/open)
+    // Function to completely wipe all cookies, storage, and CLOSE webview
     fun wipeCookiesAndClosePortal() {
         try {
+            AincradExtensionEngine.stopBypass(activeWebView)
             AincradKeyEngine.clear()
             val cookieManager = CookieManager.getInstance()
             cookieManager.removeAllCookies {
@@ -232,12 +159,6 @@ fun AincradHomeScreen(
                         activeWebView?.loadUrl("about:blank")
                     }
 
-                    try {
-                        backgroundWebView?.destroy()
-                        backgroundWebView = null
-                    } catch (_: Exception) {}
-
-                    // Explicit requirement: Clear data must NOT open or reload the website
                     isPortalOpen = false
                     statusNotification = "DATA & COOKIES WIPED • PORTAL CLOSED"
                 }
@@ -248,33 +169,30 @@ fun AincradHomeScreen(
         }
     }
 
-    // Trigger START SEASON with 2-second loading animation and active key extraction
+    // Trigger START SEASON
+    // CRITICAL USER RULE: If Portal is not open, START SEASON does NOT work!
     fun onStartSeasonClicked() {
-        soundManager.play(SoundType.RISING_SWEET)
-        isExtractingKey = true
-
-        // Requirement: Clicking START SEASON must NOT pop open or close the UI portal repeatedly
-        if (activeWebView != null && isPortalOpen) {
-            AincradExtensionEngine.triggerActiveKeyExtraction(activeWebView)
-        } else {
-            startBackgroundBypass()
+        if (!isPortalOpen || activeWebView == null) {
+            soundManager.play(SoundType.HEAVY_THUD)
+            statusNotification = "⚠️ অনুগ্রহ করে প্রথমে PORTAL ওপেন করে হিউম্যান ভেরিফিকেশন সম্পন্ন করুন"
+            return
         }
 
-        // 2-second loading animation before checking extracted key
+        soundManager.play(SoundType.RISING_SWEET)
+        isExtractingKey = true
+        statusNotification = "বাইপাস সক্রিয় হয়েছে... কন্টিনিউ ও শর্টনার প্রসেস চলছে"
+
+        // Activate the bypass on the currently open and verified portal
+        AincradExtensionEngine.startBypass(activeWebView)
+
         coroutineScope.launch {
             delay(2000L)
             isExtractingKey = false
             val exactWebsiteKey = AincradKeyEngine.getExtractedWebsiteKey()
             if (exactWebsiteKey != null) {
                 activeKeyModalString = exactWebsiteKey
-                showNoKeyFoundDialog = false
             } else {
                 statusNotification = "পোর্টাল বাইপাস প্রসেসিং চলছে... Key প্রস্তুত হলে ভেসে উঠবে"
-                if (activeWebView != null && isPortalOpen) {
-                    AincradExtensionEngine.triggerActiveKeyExtraction(activeWebView)
-                } else {
-                    startBackgroundBypass()
-                }
             }
         }
     }
@@ -414,14 +332,14 @@ fun AincradHomeScreen(
                         horizontalAlignment = Alignment.CenterHorizontally,
                         verticalArrangement = Arrangement.Top
                     ) {
-                        // 1. TOP LOGO: Circular Aincrad fortress logo
+                        // 1. TOP LOGO: Dual-tone Red & Green Cyber Emblem on White
                         AincradLogo(
-                            logoSize = if (isPortalOpen) 76.dp else 115.dp
+                            logoSize = if (isPortalOpen) 72.dp else 110.dp
                         )
 
                         Spacer(modifier = Modifier.height(4.dp))
 
-                        // 2. TITLE: "AINCRAD KEY GEN"
+                        // 2. TITLE: "KEY GEN"
                         Text(
                             text = stringResource(id = R.string.app_name),
                             fontFamily = OswaldFontFamily,
@@ -453,7 +371,7 @@ fun AincradHomeScreen(
                                 modifier = Modifier.fillMaxWidth(),
                                 horizontalArrangement = Arrangement.spacedBy(8.dp)
                             ) {
-                                // Button 1: PORTAL (Opens Webview below Clear Data ONLY on click)
+                                // Button 1: PORTAL (Opens Webview below Clear Data)
                                 AincradActionButton(
                                     text = stringResource(id = R.string.portal_btn),
                                     backgroundColor = PortalBtnBg,
@@ -472,11 +390,13 @@ fun AincradHomeScreen(
                                                     wv.loadUrl(PORTAL_URL)
                                                 }
                                             }
+                                        } else {
+                                            AincradExtensionEngine.stopBypass(activeWebView)
                                         }
                                     }
                                 )
 
-                                // Button 2: START SEASON (2-second loading animation then pops up exact website key)
+                                // Button 2: START SEASON (Runs bypass ONLY when portal is open)
                                 AincradActionButton(
                                     text = stringResource(id = R.string.start_season_btn),
                                     backgroundColor = StartSeasonBtnBg,
@@ -491,7 +411,7 @@ fun AincradHomeScreen(
                                 )
                             }
 
-                            // Button 3: CLEAR DATA (Wipes data and closes website without opening it)
+                            // Button 3: CLEAR DATA (Wipes data, stops bypass, and closes portal)
                             AincradActionButton(
                                 text = stringResource(id = R.string.clear_data_btn),
                                 backgroundColor = ClearDataBtnBg,
@@ -541,7 +461,10 @@ fun AincradHomeScreen(
 
                             EmbeddedPortalWebView(
                                 isOpen = true,
-                                onClose = { isPortalOpen = false },
+                                onClose = {
+                                    AincradExtensionEngine.stopBypass(activeWebView)
+                                    isPortalOpen = false
+                                },
                                 onWebViewReady = { wv ->
                                     activeWebView = wv
                                 },
@@ -574,12 +497,12 @@ fun AincradHomeScreen(
                 }
             }
 
-            // 2-Second Loading Animation Dialog
+            // High-Tech Dual-Ring Loading Animation Dialog
             if (isExtractingKey) {
                 SeasonKeyLoadingDialog()
             }
 
-            // Floating Season Key Modal (Strictly ONLY Key, COPY, and SAVE options)
+            // Floating Season Key Modal (Clean translucent surface, strictly NO BLACK BOX)
             activeKeyModalString?.let { keyString ->
                 SeasonKeyModal(
                     keyCode = keyString,
@@ -595,18 +518,6 @@ fun AincradHomeScreen(
                         savedKeysList = keyRepo.getAllKeys()
                     },
                     isAlreadySaved = savedKeysList.any { it.keyCode == keyString }
-                )
-            }
-
-            // Alert Dialog when no key has appeared on the website yet
-            if (showNoKeyFoundDialog) {
-                NoKeyFoundDialog(
-                    onDismiss = { showNoKeyFoundDialog = false },
-                    onOpenPortal = {
-                        showNoKeyFoundDialog = false
-                        currentTab = AincradNavTab.HOME
-                        isPortalOpen = true
-                    }
                 )
             }
         }

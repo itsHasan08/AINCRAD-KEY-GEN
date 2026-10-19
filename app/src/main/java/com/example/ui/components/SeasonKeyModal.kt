@@ -18,6 +18,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.ContentCopy
 import androidx.compose.material.icons.filled.Star
+import androidx.compose.material.icons.filled.VpnKey
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
@@ -33,6 +34,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalClipboardManager
 import androidx.compose.ui.platform.testTag
@@ -46,15 +48,13 @@ import androidx.compose.ui.window.DialogProperties
 import com.example.ui.theme.OswaldFontFamily
 import com.example.ui.theme.RobotoMonoFontFamily
 import com.example.ui.theme.StatusGreenText
+import com.example.ui.theme.TitleDarkCharcoal
 
 /**
- * Minimal Season Key Modal:
- * Strictly contains ONLY:
- * 1. The Key
- * 2. COPY option
- * 3. SAVE option
- * 4. Close option
- * (No extra cluttered details, timestamps, or duration text)
+ * Enhanced Light Translucent Season Key Modal:
+ * Completely avoids dark/black backgrounds.
+ * Uses a crystal-clear frosted white surface, vibrant emerald accents,
+ * and high-contrast readable key typography.
  */
 @Composable
 fun SeasonKeyModal(
@@ -73,11 +73,17 @@ fun SeasonKeyModal(
     ) {
         Box(
             modifier = Modifier
-                .fillMaxWidth(0.90f)
-                .clip(RoundedCornerShape(22.dp))
+                .fillMaxWidth(0.92f)
+                .clip(RoundedCornerShape(24.dp))
                 .background(Color.White)
-                .border(width = 1.5.dp, color = Color(0xFFE2E8F0), shape = RoundedCornerShape(22.dp))
-                .padding(22.dp)
+                .border(
+                    width = 1.5.dp,
+                    brush = Brush.linearGradient(
+                        colors = listOf(Color(0xFF10B981), Color(0xFFE2E8F0), Color(0xFFEF4444))
+                    ),
+                    shape = RoundedCornerShape(24.dp)
+                )
+                .padding(24.dp)
                 .testTag("season_key_modal"),
             contentAlignment = Alignment.Center
         ) {
@@ -85,10 +91,38 @@ fun SeasonKeyModal(
                 horizontalAlignment = Alignment.CenterHorizontally,
                 modifier = Modifier.fillMaxWidth()
             ) {
-                // Key Display Box
+                // Header Badge
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    modifier = Modifier
+                        .clip(RoundedCornerShape(8.dp))
+                        .background(Color(0xFFECFDF5))
+                        .padding(horizontal = 10.dp, vertical = 4.dp)
+                ) {
+                    Icon(
+                        imageVector = Icons.Default.VpnKey,
+                        contentDescription = null,
+                        tint = Color(0xFF059669),
+                        modifier = Modifier.size(15.dp)
+                    )
+                    Spacer(modifier = Modifier.width(6.dp))
+                    Text(
+                        text = "ORIGINAL WEBSITE KEY EXTRACTED",
+                        fontFamily = OswaldFontFamily,
+                        fontWeight = FontWeight.Bold,
+                        fontSize = 12.sp,
+                        color = Color(0xFF047857),
+                        letterSpacing = 0.8.sp
+                    )
+                }
+
+                Spacer(modifier = Modifier.height(14.dp))
+
+                // Key Display Box: Clean, Translucent Mint/Emerald Surface (NO BLACK BOX)
                 Card(
-                    shape = RoundedCornerShape(14.dp),
-                    colors = CardDefaults.cardColors(containerColor = Color(0xFF0F172A)),
+                    shape = RoundedCornerShape(16.dp),
+                    colors = CardDefaults.cardColors(containerColor = Color(0xFFF0FDF4)),
+                    border = androidx.compose.foundation.BorderStroke(1.5.dp, Color(0xFF86EFAC)),
                     modifier = Modifier
                         .fillMaxWidth()
                         .clickable {
@@ -107,9 +141,9 @@ fun SeasonKeyModal(
                             text = keyCode,
                             fontFamily = RobotoMonoFontFamily,
                             fontWeight = FontWeight.Bold,
-                            fontSize = 17.sp,
+                            fontSize = 18.sp,
                             letterSpacing = 1.2.sp,
-                            color = Color(0xFF67E8F9),
+                            color = Color(0xFF065F46),
                             textAlign = TextAlign.Center
                         )
                     }
@@ -133,63 +167,63 @@ fun SeasonKeyModal(
                     modifier = Modifier.fillMaxWidth(),
                     horizontalArrangement = Arrangement.spacedBy(10.dp)
                 ) {
-                    // COPY Button
+                    // COPY Button: Vibrant Emerald Green
                     Button(
                         onClick = {
                             clipboardManager.setText(AnnotatedString(keyCode))
                             copied = true
                         },
                         colors = ButtonDefaults.buttonColors(
-                            containerColor = if (copied) Color(0xFF137333) else Color(0xFF1E293B)
+                            containerColor = if (copied) Color(0xFF059669) else Color(0xFF10B981)
                         ),
-                        shape = RoundedCornerShape(12.dp),
+                        shape = RoundedCornerShape(14.dp),
                         modifier = Modifier
                             .weight(1f)
-                            .height(46.dp)
+                            .height(48.dp)
                             .testTag("copy_key_button")
                     ) {
                         Icon(
                             imageVector = if (copied) Icons.Default.Check else Icons.Default.ContentCopy,
                             contentDescription = null,
                             tint = Color.White,
-                            modifier = Modifier.size(16.dp)
+                            modifier = Modifier.size(17.dp)
                         )
                         Spacer(modifier = Modifier.width(6.dp))
                         Text(
                             text = if (copied) "COPIED" else "COPY",
                             fontFamily = OswaldFontFamily,
-                            fontSize = 15.sp,
+                            fontSize = 16.sp,
                             fontWeight = FontWeight.Bold,
                             color = Color.White
                         )
                     }
 
-                    // SAVE Button
+                    // SAVE Button: Vibrant Azure Blue
                     Button(
                         onClick = {
                             onSaveKey(keyCode)
                             saved = true
                         },
                         colors = ButtonDefaults.buttonColors(
-                            containerColor = if (saved) Color(0xFF0F766E) else Color(0xFF0284C7)
+                            containerColor = if (saved) Color(0xFF059669) else Color(0xFF0284C7)
                         ),
-                        shape = RoundedCornerShape(12.dp),
+                        shape = RoundedCornerShape(14.dp),
                         modifier = Modifier
                             .weight(1f)
-                            .height(46.dp)
+                            .height(48.dp)
                             .testTag("save_key_button")
                     ) {
                         Icon(
                             imageVector = if (saved) Icons.Default.Check else Icons.Default.Star,
                             contentDescription = null,
                             tint = Color.White,
-                            modifier = Modifier.size(16.dp)
+                            modifier = Modifier.size(17.dp)
                         )
                         Spacer(modifier = Modifier.width(6.dp))
                         Text(
                             text = if (saved) "SAVED" else "SAVE",
                             fontFamily = OswaldFontFamily,
-                            fontSize = 15.sp,
+                            fontSize = 16.sp,
                             fontWeight = FontWeight.Bold,
                             color = Color.White
                         )
@@ -201,10 +235,11 @@ fun SeasonKeyModal(
                 // Close Button
                 OutlinedButton(
                     onClick = onDismiss,
-                    shape = RoundedCornerShape(12.dp),
+                    shape = RoundedCornerShape(14.dp),
+                    border = androidx.compose.foundation.BorderStroke(1.dp, Color(0xFFE2E8F0)),
                     modifier = Modifier
                         .fillMaxWidth()
-                        .height(40.dp)
+                        .height(42.dp)
                         .testTag("close_key_modal_button")
                 ) {
                     Text(

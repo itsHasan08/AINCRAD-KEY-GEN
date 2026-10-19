@@ -5,36 +5,36 @@ import android.webkit.WebView
 import java.net.URLEncoder
 
 /**
- * Aincrad Bypass Engine:
- * Implements silent background shortener bypass, automated clickers,
- * and DOM/cookie/storage key extraction without displaying any intrusive branding or extension text.
+ * KEY GEN Bypass Engine:
+ * Implements controlled shortener bypass, automated clickers,
+ * and DOM/cookie/storage key extraction.
+ *
+ * CRITICAL RULE:
+ * Bypass remains completely INACTIVE until the user explicitly taps "START SEASON"
+ * after completing human verification on the portal.
  */
 object AincradExtensionEngine {
 
     const val HANDSHAKE_TOKEN = "3TMdueEaUw"
     const val BASE_SHORTENER_URL = "https://encurtarapido.com/"
 
-    // Injected content script (silent, completely clean, no visible extension badges)
-    val CONTENT_SCRIPT: String = """
+    @Volatile
+    var isBypassActive: Boolean = false
+        private set
+
+    // Script injected ONLY when bypass is actively running
+    val ACTIVE_BYPASS_SCRIPT: String = """
         (function() {
-            // Strip any intrusive third-party watermarks or branding
+            // Strip any intrusive watermarks or ads
             try {
                 var bad = document.querySelectorAll('#xenox-brand, #xenox-toast-lock, [id*="extension"], [class*="extension"]');
                 bad.forEach(function(el) { el.remove(); });
             } catch(e) {}
 
-            if (window.__AINCRAD_BYPASS_INITIALIZED__) {
-                if (typeof window.__aincradScanKey === 'function') {
-                    window.__aincradScanKey();
-                }
-                return;
-            }
-            window.__AINCRAD_BYPASS_INITIALIZED__ = true;
-
             var CONFIG = {
                 TOKEN: '$HANDSHAKE_TOKEN',
                 BASE_URL: '$BASE_SHORTENER_URL',
-                CLICK_COOLDOWN: 1500
+                CLICK_COOLDOWN: 1200
             };
 
             var CLICK_KEYWORDS = [
@@ -52,7 +52,6 @@ object AincradExtensionEngine {
                 "generate key",
                 "claim",
                 "claim key",
-                "verify",
                 "start season",
                 "generate",
                 "ir para o link",
@@ -65,8 +64,7 @@ object AincradExtensionEngine {
                 "acessar link",
                 "download",
                 "claim key",
-                "get key",
-                "prosseguir"
+                "get key"
             ];
 
             var lastClickTime = 0;
@@ -87,8 +85,8 @@ object AincradExtensionEngine {
                 }
             }
 
-            // 1. Scan DOM, input fields, cookies, localStorage, and text for the original key
-            window.__aincradScanKey = function() {
+            // 1. Scan for original key across DOM, inputs, cookies, and localStorage
+            window.__keygenScanKey = function() {
                 var aincradRegex = /AINCRAD-[A-Za-z0-9_\-]+/i;
                 var generalRegex = /(?:key|token|chave)\s*[:=]\s*([A-Za-z0-9_\-]{8,})/i;
 
@@ -130,7 +128,6 @@ object AincradExtensionEngine {
                             window.AincradBridge.onKeyExtracted(mG[1]);
                             return true;
                         }
-                        // Direct value if input is dedicated key field and non-empty
                         if ((it.id === 'key' || it.id === 'keyValue' || it.name === 'key') && v.length >= 8 && window.AincradBridge) {
                             window.AincradBridge.onKeyExtracted(v);
                             return true;
@@ -185,7 +182,7 @@ object AincradExtensionEngine {
                 return false;
             };
 
-            // 2. Shortener handshake redirection
+            // 2. Shortener token handshake redirection
             function handleTokenHandshake() {
                 if (window.location.hostname.indexOf('precisosaberinvestir.com.br') !== -1) {
                     try {
@@ -202,21 +199,20 @@ object AincradExtensionEngine {
 
             // 3. Automation loop: countdown timers and continue clicks
             function automationLoop() {
-                if (window.__aincradScanKey()) return;
+                if (window.__keygenScanKey()) return;
 
-                // Handle countdown timers if present (accelerate or watch)
+                // Handle countdown timers if present
                 try {
                     if (typeof count !== 'undefined' && count > 0) count = 0;
                     if (typeof counter !== 'undefined' && counter > 0) counter = 0;
                 } catch(e) {}
 
-                // Check final buttons first (e.g. Obter link / Get link / Continue)
+                // Check final buttons first (e.g. Obter link / Get link)
                 var buttons = document.querySelectorAll('button, a, .btn, .button, input[type="submit"], input[type="button"]');
                 for (var b = 0; b < buttons.length; b++) {
                     var btn = buttons[b];
                     var text = (btn.innerText || btn.textContent || btn.value || '').trim().toLowerCase();
 
-                    // Check if final button is ready
                     for (var f = 0; f < FINAL_BUTTON_KEYWORDS.length; f++) {
                         var fk = FINAL_BUTTON_KEYWORDS[f];
                         if (text === fk || text.indexOf(fk) !== -1) {
@@ -229,7 +225,6 @@ object AincradExtensionEngine {
                         }
                     }
 
-                    // Check intermediate continue / proceed buttons
                     for (var k = 0; k < CLICK_KEYWORDS.length; k++) {
                         var kw = CLICK_KEYWORDS[k];
                         if (text === kw || text.indexOf(kw) !== -1) {
@@ -244,49 +239,93 @@ object AincradExtensionEngine {
                 }
             }
 
-            // 4. MutationObserver for instant key and DOM event detection
-            try {
-                var observer = new MutationObserver(function() {
-                    window.__aincradScanKey();
-                });
-                observer.observe(document.documentElement || document.body, {
-                    childList: true,
-                    subtree: true,
-                    attributes: true
-                });
-            } catch(e) {}
+            window.__KEYGEN_STOP_BYPASS__ = function() {
+                if (window.__keygenInterval) {
+                    clearInterval(window.__keygenInterval);
+                    window.__keygenInterval = null;
+                }
+                if (window.__keygenObserver) {
+                    window.__keygenObserver.disconnect();
+                    window.__keygenObserver = null;
+                }
+            };
 
-            // Initial execution
+            // Start active bypass loop
             handleTokenHandshake();
-            window.__aincradScanKey();
+            window.__keygenScanKey();
 
-            if (window.__aincradInterval) {
-                clearInterval(window.__aincradInterval);
+            if (window.__keygenInterval) {
+                clearInterval(window.__keygenInterval);
             }
-            window.__aincradInterval = setInterval(automationLoop, 1000);
+            window.__keygenInterval = setInterval(automationLoop, 1000);
+
+            try {
+                if (!window.__keygenObserver) {
+                    window.__keygenObserver = new MutationObserver(function() {
+                        window.__keygenScanKey();
+                    });
+                    window.__keygenObserver.observe(document.documentElement || document.body, {
+                        childList: true,
+                        subtree: true,
+                        attributes: true
+                    });
+                }
+            } catch(e) {}
         })();
     """.trimIndent()
 
-    // Script to forcefully trigger key extraction and immediate button clicks
-    val FORCE_TRIGGER_SCRIPT: String = """
+    val STOP_SCRIPT: String = """
         (function() {
-            if (typeof window.__aincradScanKey === 'function') {
-                window.__aincradScanKey();
-            }
-            var btns = document.querySelectorAll('button, a, .btn, input[type="submit"], input[type="button"]');
-            for (var i = 0; i < btns.length; i++) {
-                var t = (btns[i].innerText || btns[i].textContent || btns[i].value || '').trim().toLowerCase();
-                if (t.indexOf('get key') !== -1 || t.indexOf('gerar key') !== -1 || t.indexOf('generate key') !== -1 || t.indexOf('prosseguir') !== -1 || t.indexOf('obter link') !== -1 || t.indexOf('start season') !== -1) {
-                    try { btns[i].click(); } catch(e) {}
-                    break;
-                }
+            if (typeof window.__KEYGEN_STOP_BYPASS__ === 'function') {
+                window.__KEYGEN_STOP_BYPASS__();
             }
         })();
     """.trimIndent()
 
     /**
-     * Rules filter:
-     * Blocks intrusive ad popups and trackers so the portal session remains uninterrupted.
+     * Starts the bypass system.
+     * Called strictly when the user clicks START SEASON after completing human verification.
+     */
+    fun startBypass(webView: WebView?) {
+        isBypassActive = true
+        webView?.post {
+            // Check current URL and cookies first
+            val currentUrl = webView.url
+            AincradKeyEngine.extractFromContent(currentUrl)
+            try {
+                val cookieManager = CookieManager.getInstance()
+                val cookies = cookieManager.getCookie(currentUrl ?: "https://aincradmods.com")
+                AincradKeyEngine.extractFromContent(cookies)
+            } catch (_: Exception) {}
+
+            webView.evaluateJavascript(ACTIVE_BYPASS_SCRIPT, null)
+        }
+    }
+
+    /**
+     * Stops the bypass system.
+     * Called when key is found, or on Clear Data, or when portal is closed.
+     */
+    fun stopBypass(webView: WebView?) {
+        isBypassActive = false
+        webView?.post {
+            webView.evaluateJavascript(STOP_SCRIPT, null)
+        }
+    }
+
+    /**
+     * Injects bypass script ONLY if bypass is currently active.
+     */
+    fun onPageFinished(webView: WebView?) {
+        if (isBypassActive) {
+            webView?.post {
+                webView.evaluateJavascript(ACTIVE_BYPASS_SCRIPT, null)
+            }
+        }
+    }
+
+    /**
+     * Filters intrusive popup ads while keeping portal infrastructure intact.
      */
     fun isAdOrTrackerUrl(url: String): Boolean {
         val lower = url.lowercase()
@@ -317,34 +356,6 @@ object AincradExtensionEngine {
             } else null
         } catch (_: Exception) {
             null
-        }
-    }
-
-    /**
-     * Injects the content script into the specified WebView.
-     */
-    fun injectExtension(webView: WebView?) {
-        webView?.post {
-            webView.evaluateJavascript(CONTENT_SCRIPT, null)
-        }
-    }
-
-    /**
-     * Forces immediate key scanning and automation triggers.
-     */
-    fun triggerActiveKeyExtraction(webView: WebView?) {
-        webView?.post {
-            val currentUrl = webView.url
-            AincradKeyEngine.extractFromContent(currentUrl)
-
-            try {
-                val cookieManager = CookieManager.getInstance()
-                val cookies = cookieManager.getCookie(currentUrl ?: "https://aincradmods.com")
-                AincradKeyEngine.extractFromContent(cookies)
-            } catch (_: Exception) {}
-
-            webView.evaluateJavascript(FORCE_TRIGGER_SCRIPT, null)
-            webView.evaluateJavascript(CONTENT_SCRIPT, null)
         }
     }
 }

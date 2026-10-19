@@ -1,6 +1,6 @@
 {
-  "name": "AINCRAD KEY GEN",
-  "description": "Aincrad Key Generator utility with live server status and secure incognito key portal.",
+  "name": "KEY GEN",
+  "description": "KEY GEN automated portal verification and original key extraction utility.",
   "requestFramePermissions": [],
   "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
 }

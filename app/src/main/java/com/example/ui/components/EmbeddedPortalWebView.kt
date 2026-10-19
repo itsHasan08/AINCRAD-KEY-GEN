@@ -80,7 +80,6 @@ fun prepareFreshDirectories(context: Context) {
         val indexDir = File(baseCache, "index-dir")
         if (!indexDir.exists()) indexDir.mkdirs()
 
-        // Clean any zero-byte or corrupt variations seed files to prevent Seed missing signature errors
         val webViewDir = File(context.dataDir, "app_webview")
         if (!webViewDir.exists()) {
             webViewDir.mkdirs()
@@ -101,7 +100,7 @@ fun prepareFreshDirectories(context: Context) {
 /**
  * Embedded in-app WebView located directly BELOW the CLEAR DATA button.
  * Opens ONLY when the user clicks the PORTAL button.
- * Uses software rendering layer to prevent Chromium rendernode GPU crash on Linux container/emulator.
+ * Allows peaceful human verification without automated clicks or interruptions.
  */
 @SuppressLint("SetJavaScriptEnabled")
 @Composable
@@ -147,7 +146,7 @@ fun EmbeddedPortalWebView(
                     .padding(horizontal = 12.dp, vertical = 6.dp),
                 verticalAlignment = Alignment.CenterVertically
             ) {
-                // Incognito shield badge
+                // Incognito / Portal Badge
                 Row(
                     verticalAlignment = Alignment.CenterVertically,
                     modifier = Modifier
@@ -246,7 +245,6 @@ fun EmbeddedPortalWebView(
                     factory = { context ->
                         prepareFreshDirectories(context)
                         WebView(context).apply {
-                            // CRITICAL: Software layer prevents GPU rendernode missing errors and Chromium renderer crashes (-1)
                             setLayerType(View.LAYER_TYPE_SOFTWARE, null)
 
                             layoutParams = ViewGroup.LayoutParams(
@@ -270,24 +268,24 @@ fun EmbeddedPortalWebView(
                                 userAgentString = "Mozilla/5.0 (Linux; Android 14; Mobile) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Mobile Safari/537.36"
                             }
 
-                            // Add Javascript Interface for real-time key extraction from portal website
+                            // Add Javascript Interface for real-time key extraction
                             addJavascriptInterface(object {
                                 @android.webkit.JavascriptInterface
                                 fun onKeyExtracted(key: String) {
                                     if (key.isNotBlank()) {
+                                        // Stop bypass immediately when key is captured
+                                        AincradExtensionEngine.stopBypass(this@apply)
                                         AincradKeyEngine.onKeyDetectedFromWebsite(key)
                                     }
                                 }
                             }, "AincradBridge")
 
-                            // Keep all navigation in-app with rules ad filtering and shortener handshake redirects
                             webViewClient = object : WebViewClient() {
                                 override fun shouldInterceptRequest(
                                     view: WebView?,
                                     request: WebResourceRequest?
                                 ): WebResourceResponse? {
                                     val url = request?.url?.toString() ?: ""
-                                    // Block invasive popup ads and trackers
                                     if (AincradExtensionEngine.isAdOrTrackerUrl(url)) {
                                         return WebResourceResponse("text/plain", "UTF-8", ByteArrayInputStream(ByteArray(0)))
                                     }
@@ -299,23 +297,25 @@ fun EmbeddedPortalWebView(
                                     request: WebResourceRequest?
                                 ): Boolean {
                                     val url = request?.url?.toString() ?: ""
-                                    // Fast-track shortener handshake redirect directly
-                                    val shortcut = AincradExtensionEngine.transformShortenerRedirect(url)
-                                    if (shortcut != null) {
-                                        view?.loadUrl(shortcut)
-                                        return true
+                                    // Transform shortener redirect only if bypass is active
+                                    if (AincradExtensionEngine.isBypassActive) {
+                                        val shortcut = AincradExtensionEngine.transformShortenerRedirect(url)
+                                        if (shortcut != null) {
+                                            view?.loadUrl(shortcut)
+                                            return true
+                                        }
                                     }
                                     return false
                                 }
 
                                 override fun onPageStarted(view: WebView?, url: String?, favicon: Bitmap?) {
                                     isLoading = true
-                                    AincradExtensionEngine.injectExtension(view)
                                 }
 
                                 override fun onPageFinished(view: WebView?, url: String?) {
                                     isLoading = false
-                                    AincradExtensionEngine.injectExtension(view)
+                                    // Inject bypass script ONLY if bypass was triggered by START SEASON
+                                    AincradExtensionEngine.onPageFinished(view)
                                 }
 
                                 override fun onReceivedError(
@@ -330,7 +330,6 @@ fun EmbeddedPortalWebView(
                                     view: WebView?,
                                     detail: RenderProcessGoneDetail?
                                 ): Boolean {
-                                    // Safely remove and destroy the dead WebView to prevent infinite crash loops
                                     try {
                                         (view?.parent as? ViewGroup)?.removeView(view)
                                         view?.destroy()
@@ -346,16 +345,13 @@ fun EmbeddedPortalWebView(
                                     if (newProgress >= 100) {
                                         isLoading = false
                                     }
-                                    if (newProgress in 35..90) {
-                                        AincradExtensionEngine.injectExtension(view)
-                                    }
                                 }
                             }
 
                             webViewInstance = this
                             onWebViewReady(this)
 
-                            // Load portal when user opens PORTAL
+                            // Load portal smoothly
                             loadUrl(PORTAL_URL)
                         }
                     },
@@ -370,6 +366,7 @@ fun EmbeddedPortalWebView(
     DisposableEffect(Unit) {
         onDispose {
             try {
+                AincradExtensionEngine.stopBypass(webViewInstance)
                 webViewInstance?.stopLoading()
                 webViewInstance?.destroy()
             } catch (_: Exception) {}

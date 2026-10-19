@@ -19,5 +19,5 @@ dependencyResolutionManagement {
     }
 }
 
-rootProject.name = "AINCRAD KEY GEN"
+rootProject.name = "KEY GEN"
 include(":app")
